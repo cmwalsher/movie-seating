@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Seats</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --bg2: #111113;
+    --bg3: #1a1a1e;
+    --bg4: #222228;
+    --border: #2a2a32;
+    --border2: #3a3a44;
+    --text: #e8e6e0;
+    --text2: #9a9890;
+    --text3: #5a5858;
+    --amber: #f0a500;
+    --amber2: #c8841a;
+    --amber-dim: rgba(240,165,0,0.12);
+    --green: #4caf7d;
+    --green-dim: rgba(76,175,125,0.15);
+    --red: #e05252;
+    --red-dim: rgba(224,82,82,0.15);
+    --yellow: #d4b44a;
+    --yellow-dim: rgba(212,180,74,0.15);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
+
+  /* grain overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999; opacity: 0.4;
+  }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 40px 24px; gap: 32px;
+  }
+  .login-logo { font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 6px; color: var(--amber); line-height: 1; }
+  .login-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); letter-spacing: 3px; text-transform: uppercase; margin-top: -24px; }
+  .login-card {
+    width: 100%; max-width: 340px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 28px 24px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .login-card label { font-size: 11px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .login-card input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; color: var(--text);
+    font-size: 16px; font-family: 'DM Mono', monospace; letter-spacing: 4px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .login-card input:focus { border-color: var(--amber); }
+  .btn-primary {
+    width: 100%; background: var(--amber); color: #0a0a0b;
+    border: none; border-radius: var(--radius-sm); padding: 14px;
+    font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+    font-family: 'DM Sans', sans-serif; cursor: pointer; transition: background 0.2s, transform 0.1s;
+  }
+  .btn-primary:active { transform: scale(0.98); background: var(--amber2); }
+  .login-error { font-size: 12px; color: var(--red); text-align: center; font-family: 'DM Mono', monospace; }
+
+  /* ── APP SHELL ── */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+  #app.visible { display: flex; }
+
+  /* header */
+  .app-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
+    background: var(--bg); position: sticky; top: 0; z-index: 100;
+  }
+  .app-logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 4px; color: var(--amber); }
+  .user-badge {
+    font-size: 22px; cursor: pointer; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+  }
+
+  /* tab bar */
+  .tab-bar {
+    display: flex; background: var(--bg2); border-bottom: 1px solid var(--border);
+    position: sticky; top: 57px; z-index: 99;
+  }
+  .tab-btn {
+    flex: 1; padding: 12px 8px; text-align: center;
+    font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    font-family: 'DM Mono', monospace; color: var(--text3); cursor: pointer;
+    border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s; background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  /* main content */
+  .main { flex: 1; overflow-y: auto; padding: 20px 16px 100px; }
+
+  /* ── VIEWS ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* section label */
+  .section-label {
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+  }
+
+  /* theater card */
+  .theater-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 12px; overflow: hidden; cursor: pointer; transition: border-color 0.2s;
+  }
+  .theater-card:active { border-color: var(--amber); }
+  .theater-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px;
+  }
+  .theater-name { font-size: 16px; font-weight: 600; }
+  .theater-meta { font-size: 12px; color: var(--text2); margin-top: 2px; font-family: 'DM Mono', monospace; }
+  .theater-chevron { color: var(--text3); font-size: 18px; }
+  .aud-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 14px; }
+  .aud-chip {
+    font-family: 'DM Mono', monospace; font-size: 11px; padding: 4px 10px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 20px;
+    color: var(--text2);
+  }
+
+  /* add button floating */
+  .fab {
+    position: fixed; bottom: 24px; right: 20px; z-index: 200;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--amber); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: #0a0a0b; font-weight: 300;
+    box-shadow: 0 4px 20px rgba(240,165,0,0.35);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .fab:active { transform: scale(0.92); box-shadow: 0 2px 10px rgba(240,165,0,0.2); }
+
+  /* ── AUDITORIUM DETAIL ── */
+  .back-btn {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--amber); cursor: pointer;
+    font-family: 'DM Mono', monospace; letter-spacing: 1px;
+    margin-bottom: 20px; background: none; border: none;
+  }
+  .aud-detail-header { margin-bottom: 24px; }
+  .aud-detail-title { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 3px; color: var(--text); line-height: 1; }
+  .aud-detail-sub { font-size: 13px; color: var(--text2); margin-top: 4px; font-family: 'DM Mono', monospace; }
+
+  /* attribute pills row */
+  .attr-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .attr-pill {
+    font-family: 'DM Mono', monospace; font-size: 11px; padding: 5px 12px;
+    border-radius: 20px; border: 1px solid var(--border); color: var(--text2);
+    background: var(--bg3);
+  }
+  .attr-pill.on { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+
+  /* SCREEN label */
+  .screen-bar {
+    background: linear-gradient(to bottom, #888, #555);
+    border-radius: 4px 4px 0 0; height: 8px; margin-bottom: 4px;
+    position: relative;
+  }
+  .screen-label {
+    font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 3px;
+    color: var(--text3); text-align: center; text-transform: uppercase; margin-bottom: 16px;
+  }
+
+  /* seat grid */
+  .seat-grid-container { overflow-x: auto; padding-bottom: 8px; }
+  .seat-grid { display: inline-flex; flex-direction: column; gap: 3px; min-width: 100%; }
+  .seat-row { display: flex; align-items: center; gap: 3px; }
+  .row-label {
+    font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3);
+    width: 20px; flex-shrink: 0; text-align: center;
+  }
+  .seat {
+    width: 28px; height: 24px; border-radius: 4px 4px 2px 2px;
+    border: 1px solid var(--border); background: var(--bg3);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace; font-size: 8px; color: var(--text3);
+  }
+  .seat:active { transform: scale(0.9); }
+  .seat.love { background: var(--green-dim); border-color: var(--green); }
+  .seat.like { background: var(--yellow-dim); border-color: var(--yellow); }
+  .seat.avoid { background: var(--red-dim); border-color: var(--red); }
+
+  /* aisle marker */
+  .aisle-gap {
+    height: 10px; display: flex; align-items: center; cursor: pointer; padding: 0 0 0 23px;
+  }
+  .aisle-line {
+    flex: 1; height: 2px; border-radius: 1px; background: transparent;
+    border: 1px dashed var(--border); transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .aisle-gap:active .aisle-line, .aisle-gap.marked .aisle-line {
+    border-color: var(--amber); background: var(--amber-dim);
+  }
+  .aisle-gap.marked .aisle-line::after {
+    content: 'AISLE'; position: absolute; left: 50%; transform: translateX(-50%);
+    top: -8px; font-family: 'DM Mono', monospace; font-size: 8px;
+    color: var(--amber); letter-spacing: 2px;
+  }
+
+  /* row rating strip */
+  .row-rating-strip { display: flex; align-items: center; gap: 3px; margin-left: 4px; }
+  .row-rating-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    cursor: pointer; transition: transform 0.15s;
+    border: 1px solid var(--border); background: var(--bg3);
+  }
+  .row-rating-dot:active { transform: scale(1.3); }
+  .row-rating-dot.love { background: var(--green); border-color: var(--green); }
+  .row-rating-dot.like { background: var(--yellow); border-color: var(--yellow); }
+  .row-rating-dot.avoid { background: var(--red); border-color: var(--red); }
+
+  /* legend */
+  .legend { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-dot.love { background: var(--green); }
+  .legend-dot.like { background: var(--yellow); }
+  .legend-dot.avoid { background: var(--red); }
+
+  /* row notes panel */
+  .row-note-panel {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 14px; margin-top: 16px; display: none;
+  }
+  .row-note-panel.open { display: block; }
+  .row-note-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px; color: var(--amber); text-transform: uppercase; margin-bottom: 12px; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .toggle-label { font-size: 13px; color: var(--text); }
+  .toggle-switch {
+    width: 40px; height: 22px; background: var(--bg4); border-radius: 11px;
+    border: 1px solid var(--border); position: relative; cursor: pointer; transition: background 0.2s;
+  }
+  .toggle-switch.on { background: var(--amber); border-color: var(--amber); }
+  .toggle-switch::after {
+    content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text3); top: 2px; left: 2px; transition: left 0.2s, background 0.2s;
+  }
+  .toggle-switch.on::after { left: 20px; background: #0a0a0b; }
+  .note-input {
+    width: 100%; background: var(--bg4); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 12px; color: var(--text);
+    font-size: 13px; font-family: 'DM Sans', sans-serif; outline: none; resize: none;
+    transition: border-color 0.2s; margin-top: 8px; min-height: 60px;
+  }
+  .note-input:focus { border-color: var(--amber); }
+  .save-row-btn {
+    margin-top: 10px; width: 100%; padding: 10px; background: var(--amber);
+    color: #0a0a0b; border: none; border-radius: var(--radius-sm); font-size: 12px;
+    font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── MODALS ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 300; align-items: flex-end; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    width: 100%; max-width: 480px; background: var(--bg2);
+    border-radius: 20px 20px 0 0; border: 1px solid var(--border); border-bottom: none;
+    padding: 24px 20px 40px; max-height: 90vh; overflow-y: auto;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 0 auto 20px; }
+  .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; margin-bottom: 20px; }
+  .field-group { margin-bottom: 16px; }
+  .field-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 2px; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
+  .field-input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; color: var(--text);
+    font-size: 15px; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s;
+  }
+  .field-input:focus { border-color: var(--amber); }
+  .chip-select { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); font-size: 13px; cursor: pointer;
+    transition: all 0.15s; font-family: 'DM Mono', monospace;
+  }
+  .chip.selected { border-color: var(--amber); background: var(--amber-dim); color: var(--amber); }
+  .stairs-chip-row { display: flex; gap: 8px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-secondary {
+    flex: 1; padding: 14px; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text2); font-size: 13px;
+    font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+  .btn-danger {
+    padding: 14px 20px; background: var(--red-dim); border: 1px solid var(--red);
+    border-radius: var(--radius-sm); color: var(--red); font-size: 13px;
+    font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── STATS VIEW ── */
+  .stats-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 12px;
+  }
+  .stats-card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .stats-card-sub { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; }
+  .best-row-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-dim); border: 1px solid var(--green);
+    border-radius: 20px; padding: 4px 12px; margin-top: 10px;
+    font-family: 'DM Mono', monospace; font-size: 12px; color: var(--green);
+  }
+
+  /* empty state */
+  .empty-state { text-align: center; padding: 60px 20px; }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--text2); }
+  .empty-sub { font-size: 13px; color: var(--text3); margin-top: 8px; font-family: 'DM Mono', monospace; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 10px 20px; font-size: 13px; font-family: 'DM Mono', monospace;
+    color: var(--text); z-index: 500; opacity: 0; transition: opacity 0.2s, transform 0.2s;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* spinner */
+  .spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid var(--border); border-top-color: var(--amber);
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-center { display: flex; justify-content: center; padding: 40px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div>
+    <div class="login-logo">SEATS</div>
+    <div class="login-sub">Theater Preference Tracker</div>
+  </div>
+  <div class="login-card">
+    <label>Password</label>
+    <input type="password" id="pw-input" placeholder="••••••" autocomplete="current-password">
+    <div id="login-error" class="login-error" style="display:none">Wrong password</div>
+    <button class="btn-primary" onclick="doLogin()">Enter</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="app-header">
+    <div class="app-logo">SEATS</div>
+    <div class="user-badge" id="user-badge" onclick="logout()" title="Tap to log out"></div>
+  </header>
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-view="theaters" onclick="switchTab('theaters')">Theaters</button>
+    <button class="tab-btn" data-view="quick" onclick="switchTab('quick')">Quick Log</button>
+    <button class="tab-btn" data-view="stats" onclick="switchTab('stats')">Best Seats</button>
+  </nav>
+  <main class="main">
+
+    <!-- THEATERS VIEW -->
+    <div id="view-theaters" class="view active">
+      <div id="theaters-list"></div>
+    </div>
+
+    <!-- AUDITORIUM DETAIL VIEW -->
+    <div id="view-aud-detail" class="view">
+      <button class="back-btn" onclick="backToTheaters()">← Back</button>
+      <div id="aud-detail-content"></div>
+    </div>
+
+    <!-- QUICK LOG VIEW -->
+    <div id="view-quick" class="view">
+      <div id="quick-content"></div>
+    </div>
+
+    <!-- STATS VIEW -->
+    <div id="view-stats" class="view">
+      <div id="stats-content"></div>
+    </div>
+
+  </main>
+  <button class="fab" id="fab-btn" onclick="openAddModal()">+</button>
+</div>
+
+<!-- ADD THEATER MODAL -->
+<div class="modal-overlay" id="modal-theater">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Theater</div>
+    <div class="field-group">
+      <div class="field-label">Theater Name</div>
+      <input class="field-input" id="new-theater-name" placeholder="e.g. AMC Mission Valley 20">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Location / City</div>
+      <input class="field-input" id="new-theater-location" placeholder="e.g. Mission Valley, San Diego">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-theater')">Cancel</button>
+      <button class="btn-primary" style="flex:2" onclick="saveTheater()">Save Theater</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD AUDITORIUM MODAL -->
+<div class="modal-overlay" id="modal-aud">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Auditorium</div>
+    <div class="field-group">
+      <div class="field-label">Theater</div>
+      <select class="field-input" id="aud-theater-select" style="appearance:auto"></select>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Auditorium #</div>
+      <input class="field-input" id="new-aud-num" type="number" placeholder="e.g. 17" inputmode="numeric">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Format</div>
+      <div class="chip-select" id="format-chips">
+        <div class="chip" data-val="Standard">Standard</div>
+        <div class="chip" data-val="Dolby">Dolby</div>
+        <div class="chip" data-val="IMAX">IMAX</div>
+        <div class="chip" data-val="PLF">PLF</div>
+        <div class="chip" data-val="3D">3D</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Seats</div>
+      <div class="chip-select">
+        <div class="chip selected" data-grp="seats" data-val="Recliner">Recliner</div>
+        <div class="chip" data-grp="seats" data-val="Standard">Standard</div>
+        <div class="chip" data-grp="seats" data-val="Rocker">Rocker</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Stairs</div>
+      <div class="chip-select">
+        <div class="chip" data-grp="stairs" data-val="Both">Both sides</div>
+        <div class="chip" data-grp="stairs" data-val="Left">Left only</div>
+        <div class="chip" data-grp="stairs" data-val="Right">Right only</div>
+        <div class="chip" data-grp="stairs" data-val="None">No stairs</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Row Count (optional)</div>
+      <input class="field-input" id="new-aud-rows" type="number" placeholder="e.g. 14" inputmode="numeric">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Seats Per Row (optional, default)</div>
+      <input class="field-input" id="new-aud-seats" type="number" placeholder="e.g. 18" inputmode="numeric">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Notes</div>
+      <textarea class="field-input note-input" id="new-aud-notes" placeholder="General notes about this auditorium..." style="min-height:70px; resize:none"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('modal-aud')">Cancel</button>
+      <button class="btn-primary" style="flex:2" onclick="saveAuditorium()">Add Auditorium</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL CHOOSER -->
+<div class="modal-overlay" id="modal-add-chooser">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add New</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <button class="btn-primary" onclick="closeModal('modal-add-chooser');openTheaterModal()">🎬 New Theater</button>
+      <button class="btn-secondary" style="padding:14px;font-size:14px" onclick="closeModal('modal-add-chooser');openAudModal()">🎭 New Auditorium</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// SUPABASE CONFIG — replace with your project
+// ══════════════════════════════════════════════
+const SUPABASE_URL = 'https://prvrmmwicuionzuzmfnw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydnJtbXdpY3Vpb256dXptZm53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2ODkyMDEsImV4cCI6MjA4OTI2NTIwMX0.L2iGKoOOqwDt4158ca4g5pXbcBA_zyxeQRsJy1wQlNQ';
+
+const USERS = {
+  'slippy': { name: 'C', emoji: '🚡', id: 'C' },
+  'moomoo': { name: 'M', emoji: '👩🏻‍🦱', id: 'M' }
+};
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let sb, currentUser = null;
+let theaters = [], auditoriums = [], rowData = {};
+let currentTheater = null, currentAud = null;
+let selectedFormat = 'Standard', selectedSeats = 'Recliner', selectedStairs = null;
+let activeRowPanel = null;
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const saved = sessionStorage.getItem('seats_user');
+  if (saved) {
+    currentUser = JSON.parse(saved);
+    enterApp();
+  }
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+  setupChips();
+});
+
+function setupChips() {
+  document.querySelectorAll('#format-chips .chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('#format-chips .chip').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      selectedFormat = c.dataset.val;
+    });
+  });
+  document.querySelectorAll('[data-grp="seats"]').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('[data-grp="seats"]').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      selectedSeats = c.dataset.val;
+    });
+  });
+  document.querySelectorAll('[data-grp="stairs"]').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('[data-grp="stairs"]').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      selectedStairs = c.dataset.val;
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+function doLogin() {
+  const pw = document.getElementById('pw-input').value;
+  const user = USERS[pw];
+  if (!user) {
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  currentUser = user;
+  sessionStorage.setItem('seats_user', JSON.stringify(user));
+  enterApp();
+}
+
+function enterApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('user-badge').textContent = currentUser.emoji;
+  loadData();
+}
+
+function logout() {
+  if (!confirm('Log out?')) return;
+  sessionStorage.removeItem('seats_user');
+  location.reload();
+}
+
+// ══════════════════════════════════════════════
+// DATA LOADING
+// ══════════════════════════════════════════════
+async function loadData() {
+  try {
+    const [t, a] = await Promise.all([
+      sb.from('theaters').select('*').order('name'),
+      sb.from('auditoriums').select('*').order('number')
+    ]);
+    theaters = t.data || [];
+    auditoriums = a.data || [];
+    renderTheatersView();
+    renderQuickView();
+    renderStatsView();
+  } catch(e) {
+    console.error(e);
+    showToast('Error loading data');
+  }
+}
+
+async function loadRowData(auditoriumId) {
+  const { data } = await sb.from('rows').select('*').eq('auditorium_id', auditoriumId);
+  rowData[auditoriumId] = {};
+  (data || []).forEach(r => { rowData[auditoriumId][r.row_letter] = r; });
+  return rowData[auditoriumId];
+}
+
+async function loadSeatData(auditoriumId) {
+  const { data } = await sb.from('seats').select('*').eq('auditorium_id', auditoriumId);
+  return data || [];
+}
+
+// ══════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════
+function switchTab(view) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + (view === 'theaters' ? 'theaters' : view === 'quick' ? 'quick' : 'stats')).classList.add('active');
+  document.getElementById('fab-btn').style.display = view === 'theaters' ? 'flex' : 'none';
+}
+
+// ══════════════════════════════════════════════
+// THEATERS VIEW
+// ══════════════════════════════════════════════
+function renderTheatersView() {
+  const el = document.getElementById('theaters-list');
+  if (!theaters.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div><div class="empty-title">No Theaters Yet</div><div class="empty-sub">Tap + to add your first theater</div></div>`;
+    return;
+  }
+  el.innerHTML = theaters.map(t => {
+    const auds = auditoriums.filter(a => a.theater_id === t.id);
+    return `
+      <div class="theater-card" onclick="openTheater('${t.id}')">
+        <div class="theater-card-header">
+          <div>
+            <div class="theater-name">${t.name}</div>
+            <div class="theater-meta">${t.location || ''} · ${auds.length} aud${auds.length !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="theater-chevron">›</div>
+        </div>
+        ${auds.length ? `<div class="aud-chips">${auds.map(a => `<div class="aud-chip" onclick="event.stopPropagation();openAudDetail('${a.id}')">#${a.number}${a.format && a.format !== 'Standard' ? ' · ' + a.format : ''}</div>`).join('')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function openTheater(theaterId) {
+  currentTheater = theaters.find(t => t.id === theaterId);
+  const auds = auditoriums.filter(a => a.theater_id === theaterId);
+  const el = document.getElementById('theaters-list');
+  el.innerHTML = `
+    <button class="back-btn" onclick="loadData()">← Theaters</button>
+    <div style="margin-bottom:20px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:3px">${currentTheater.name}</div>
+      <div style="font-size:13px;color:var(--text2);font-family:'DM Mono',monospace">${currentTheater.location || ''}</div>
+    </div>
+    <div class="section-label">Auditoriums</div>
+    ${auds.length ? auds.map(a => `
+      <div class="theater-card" onclick="openAudDetail('${a.id}')">
+        <div class="theater-card-header">
+          <div>
+            <div class="theater-name">Auditorium ${a.number}</div>
+            <div class="theater-meta">${[a.format, a.seat_type, a.stairs ? 'Stairs: ' + a.stairs : ''].filter(Boolean).join(' · ')}</div>
+          </div>
+          <div class="theater-chevron">›</div>
+        </div>
+      </div>
+    `).join('') : `<div style="color:var(--text3);font-family:'DM Mono',monospace;font-size:13px;padding:20px 0">No auditoriums added yet</div>`}
+    <button class="btn-secondary" style="width:100%;padding:14px;margin-top:12px;font-size:13px" onclick="openAudModalForTheater('${theaterId}')">+ Add Auditorium</button>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// AUDITORIUM DETAIL
+// ══════════════════════════════════════════════
+async function openAudDetail(audId) {
+  currentAud = auditoriums.find(a => a.id === audId);
+  const theater = theaters.find(t => t.id === currentAud.theater_id);
+
+  switchToDetailView();
+
+  const el = document.getElementById('aud-detail-content');
+  el.innerHTML = `<div class="loading-center"><div class="spinner"></div></div>`;
+
+  const [rows, seats] = await Promise.all([
+    loadRowData(audId),
+    loadSeatData(audId)
+  ]);
+
+  const rowLetters = getRowLetters(currentAud, rows);
+
+  // group seats by row
+  const seatsByRow = {};
+  seats.forEach(s => {
+    if (!seatsByRow[s.row_letter]) seatsByRow[s.row_letter] = {};
+    seatsByRow[s.row_letter][s.seat_number] = s;
+  });
+
+  const formatAttrs = [
+    currentAud.format && currentAud.format !== 'Standard' ? currentAud.format : null,
+    currentAud.seat_type,
+    currentAud.stairs ? `Stairs: ${currentAud.stairs}` : null,
+    currentAud.notes ? '📝 Notes' : null
+  ].filter(Boolean);
+
+  el.innerHTML = `
+    <div class="aud-detail-header">
+      <div class="aud-detail-title">${theater.name.toUpperCase()}</div>
+      <div class="aud-detail-sub">Auditorium ${currentAud.number}${currentAud.format && currentAud.format !== 'Standard' ? ' · ' + currentAud.format : ''}</div>
+      ${currentAud.notes ? `<div style="margin-top:8px;font-size:13px;color:var(--text2);font-style:italic">${currentAud.notes}</div>` : ''}
+    </div>
+
+    <div class="attr-row">
+      ${formatAttrs.map(a => `<div class="attr-pill on">${a}</div>`).join('')}
+      <div class="attr-pill" style="cursor:pointer" onclick="openEditAudModal()">✏️ Edit</div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot love"></div>Love</div>
+      <div class="legend-item"><div class="legend-dot like"></div>Like</div>
+      <div class="legend-item"><div class="legend-dot avoid"></div>Avoid</div>
+    </div>
+
+    <div class="screen-bar"></div>
+    <div class="screen-label">Screen · Front of Theater</div>
+
+    <div class="seat-grid-container">
+      <div class="seat-grid" id="seat-grid-${audId}">
+        ${renderSeatGrid(rowLetters, rows, seatsByRow, currentAud)}
+      </div>
+    </div>
+
+    <div id="row-note-panel" class="row-note-panel"></div>
+  `;
+
+  attachGridListeners(audId, rowLetters, rows, seatsByRow);
+}
+
+function getRowLetters(aud, rows) {
+  const fromRows = Object.keys(rows);
+  if (fromRows.length > 0) {
+    // build full alphabet from A to max found
+    const letters = fromRows.map(r => r.charCodeAt(0));
+    const maxCode = Math.max(...letters);
+    const result = [];
+    for (let i = 65; i <= maxCode; i++) result.push(String.fromCharCode(i));
+    return result;
+  }
+  if (aud.row_count) {
+    return Array.from({length: aud.row_count}, (_, i) => String.fromCharCode(65 + i));
+  }
+  // default 10 rows
+  return Array.from({length: 10}, (_, i) => String.fromCharCode(65 + i));
+}
+
+function renderSeatGrid(rowLetters, rows, seatsByRow, aud) {
+  let html = '';
+  rowLetters.forEach((letter, idx) => {
+    const rowInfo = rows[letter] || {};
+    const seatCount = rowInfo.seat_count || aud.default_seat_count || 16;
+    const rowRating = rowInfo.rating || '';
+
+    // aisle gap above first row
+    if (idx === 0) {
+      html += `<div class="aisle-gap" data-before="${letter}"><div class="aisle-line"></div></div>`;
+    }
+
+    // the row
+    html += `<div class="seat-row" data-row="${letter}">
+      <div class="row-label">${letter}</div>
+      ${Array.from({length: seatCount}, (_, i) => {
+        const sNum = i + 1;
+        const seat = (seatsByRow[letter] || {})[sNum] || {};
+        const rating = seat.rating || '';
+        return `<div class="seat ${rating}" data-row="${letter}" data-seat="${sNum}" title="${letter}${sNum}">${sNum}</div>`;
+      }).join('')}
+      <div class="row-rating-strip">
+        <div class="row-rating-dot ${rowRating === 'love' ? 'love' : ''}" data-row="${letter}" data-rating="love" title="Love row ${letter}"></div>
+        <div class="row-rating-dot ${rowRating === 'like' ? 'like' : ''}" data-row="${letter}" data-rating="like" title="Like row ${letter}"></div>
+        <div class="row-rating-dot ${rowRating === 'avoid' ? 'avoid' : ''}" data-row="${letter}" data-rating="avoid" title="Avoid row ${letter}"></div>
+        <div style="width:4px"></div>
+        <div style="cursor:pointer;font-size:14px;color:var(--text3)" data-row="${letter}" data-action="note" title="Row notes">✎</div>
+      </div>
+    </div>`;
+
+    // aisle gap after each row
+    html += `<div class="aisle-gap ${rowInfo.aisle_after ? 'marked' : ''}" data-before="${rowLetters[idx + 1] || ''}"><div class="aisle-line"></div></div>`;
+  });
+  return html;
+}
+
+function attachGridListeners(audId, rowLetters, rows, seatsByRow) {
+  const grid = document.getElementById(`seat-grid-${audId}`);
+  if (!grid) return;
+
+  // seat clicks
+  grid.querySelectorAll('.seat').forEach(seat => {
+    seat.addEventListener('click', () => cycleSeatRating(seat, audId));
+  });
+
+  // row rating dots
+  grid.querySelectorAll('.row-rating-dot').forEach(dot => {
+    dot.addEventListener('click', () => cycleRowRating(dot, audId));
+  });
+
+  // note icons
+  grid.querySelectorAll('[data-action="note"]').forEach(icon => {
+    icon.addEventListener('click', () => openRowNotePanel(icon.dataset.row, audId));
+  });
+
+  // aisle gaps
+  grid.querySelectorAll('.aisle-gap').forEach(gap => {
+    gap.addEventListener('click', () => toggleAisle(gap, audId));
+  });
+}
+
+async function cycleSeatRating(seatEl, audId) {
+  const row = seatEl.dataset.row;
+  const seatNum = parseInt(seatEl.dataset.seat);
+  const current = seatEl.classList.contains('love') ? 'love' : seatEl.classList.contains('like') ? 'like' : seatEl.classList.contains('avoid') ? 'avoid' : '';
+  const next = current === '' ? 'love' : current === 'love' ? 'like' : current === 'like' ? 'avoid' : '';
+
+  seatEl.className = `seat ${next}`;
+
+  try {
+    const existing = await sb.from('seats').select('id').eq('auditorium_id', audId).eq('row_letter', row).eq('seat_number', seatNum).single();
+    if (existing.data) {
+      if (next === '') {
+        await sb.from('seats').delete().eq('id', existing.data.id);
+      } else {
+        await sb.from('seats').update({ rating: next, updated_by: currentUser.id }).eq('id', existing.data.id);
+      }
+    } else if (next !== '') {
+      await sb.from('seats').insert({ auditorium_id: audId, row_letter: row, seat_number: seatNum, rating: next, updated_by: currentUser.id });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function cycleRowRating(dot, audId) {
+  const row = dot.dataset.row;
+  const rating = dot.dataset.rating;
+  const currentRows = rowData[audId] || {};
+  const current = (currentRows[row] || {}).rating || '';
+  const next = current === rating ? '' : rating;
+
+  // update UI
+  const strip = dot.closest('.row-rating-strip');
+  strip.querySelectorAll('.row-rating-dot').forEach(d => d.className = 'row-rating-dot');
+  if (next) dot.className = `row-rating-dot ${next}`;
+
+  await upsertRow(audId, row, { rating: next });
+}
+
+async function toggleAisle(gapEl, audId) {
+  const before = gapEl.dataset.before;
+  if (!before) return;
+  const prevRow = gapEl.previousElementSibling;
+  if (!prevRow || !prevRow.dataset.row) return;
+  const afterRow = prevRow.dataset.row;
+
+  const isMarked = gapEl.classList.contains('marked');
+  gapEl.classList.toggle('marked', !isMarked);
+
+  await upsertRow(audId, afterRow, { aisle_after: !isMarked });
+  showToast(!isMarked ? `Aisle marked after row ${afterRow}` : `Aisle removed`);
+}
+
+function openRowNotePanel(rowLetter, audId) {
+  const panel = document.getElementById('row-note-panel');
+  const rowInfo = (rowData[audId] || {})[rowLetter] || {};
+
+  if (activeRowPanel === rowLetter && panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    activeRowPanel = null;
+    return;
+  }
+  activeRowPanel = rowLetter;
+
+  panel.classList.add('open');
+  panel.innerHTML = `
+    <div class="row-note-label">Row ${rowLetter} Details</div>
+    <div class="toggle-row">
+      <span class="toggle-label">Foot rail / feet rest</span>
+      <div class="toggle-switch ${rowInfo.foot_rail ? 'on' : ''}" id="tog-footrail" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Railing at row front</span>
+      <div class="toggle-switch ${rowInfo.front_railing ? 'on' : ''}" id="tog-railing" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="field-label" style="margin-top:8px">Seat Count in This Row</div>
+    <input class="field-input" id="row-seat-count" type="number" inputmode="numeric" value="${rowInfo.seat_count || ''}" placeholder="e.g. 18" style="margin-top:6px">
+    <div class="field-label" style="margin-top:12px">Notes</div>
+    <textarea class="note-input" id="row-note-text" placeholder="e.g. good middle seats, slight angle on far sides...">${rowInfo.notes || ''}</textarea>
+    <button class="save-row-btn" onclick="saveRowDetails('${rowLetter}', '${audId}')">Save Row ${rowLetter}</button>
+  `;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function saveRowDetails(rowLetter, audId) {
+  const footRail = document.getElementById('tog-footrail').classList.contains('on');
+  const railing = document.getElementById('tog-railing').classList.contains('on');
+  const notes = document.getElementById('row-note-text').value;
+  const seatCount = parseInt(document.getElementById('row-seat-count').value) || null;
+
+  await upsertRow(audId, rowLetter, { foot_rail: footRail, front_railing: railing, notes, seat_count: seatCount });
+  showToast(`Row ${rowLetter} saved`);
+
+  // refresh grid
+  openAudDetail(audId);
+}
+
+async function upsertRow(audId, rowLetter, data) {
+  const current = (rowData[audId] || {})[rowLetter] || {};
+  const merged = { ...current, ...data, auditorium_id: audId, row_letter: rowLetter, updated_by: currentUser.id };
+
+  if (current.id) {
+    await sb.from('rows').update(merged).eq('id', current.id);
+  } else {
+    const { data: inserted } = await sb.from('rows').insert(merged).select().single();
+    if (!rowData[audId]) rowData[audId] = {};
+    rowData[audId][rowLetter] = inserted;
+    return;
+  }
+  if (!rowData[audId]) rowData[audId] = {};
+  rowData[audId][rowLetter] = merged;
+}
+
+function switchToDetailView() {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-aud-detail').classList.add('active');
+  document.getElementById('fab-btn').style.display = 'none';
+}
+
+function backToTheaters() {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-theaters').classList.add('active');
+  document.getElementById('fab-btn').style.display = 'flex';
+  currentAud = null;
+}
+
+// ══════════════════════════════════════════════
+// QUICK LOG VIEW
+// ══════════════════════════════════════════════
+function renderQuickView() {
+  const el = document.getElementById('quick-content');
+  if (!theaters.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-title">Quick Log</div><div class="empty-sub">Add a theater first</div></div>`;
+    return;
+  }
+
+  const theaterOptions = theaters.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  const audOptions = (theaterId) => auditoriums.filter(a => !theaterId || a.theater_id === theaterId).map(a => `<option value="${a.id}">Aud ${a.number}${a.format && a.format !== 'Standard' ? ' · ' + a.format : ''}</option>`).join('');
+
+  el.innerHTML = `
+    <div class="section-label" style="margin-bottom:16px">Log a Row Rating</div>
+    <div class="field-group">
+      <div class="field-label">Theater</div>
+      <select class="field-input" id="ql-theater" onchange="updateQuickAuds(this.value)">
+        <option value="">Select theater...</option>
+        ${theaterOptions}
+      </select>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Auditorium</div>
+      <select class="field-input" id="ql-aud">
+        <option value="">Select auditorium...</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Row</div>
+      <input class="field-input" id="ql-row" placeholder="e.g. E" maxlength="2" style="text-transform:uppercase">
+    </div>
+    <div class="field-group">
+      <div class="field-label">Rating</div>
+      <div class="chip-select">
+        <div class="chip" data-ql="rating" data-val="love" style="border-color:var(--green);color:var(--green)">❤️ Love</div>
+        <div class="chip" data-ql="rating" data-val="like" style="border-color:var(--yellow);color:var(--yellow)">👍 Like</div>
+        <div class="chip" data-ql="rating" data-val="avoid" style="border-color:var(--red);color:var(--red)">👎 Avoid</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">Quick Note (optional)</div>
+      <input class="field-input" id="ql-note" placeholder="e.g. slightly off-center but great view">
+    </div>
+    <button class="btn-primary" style="width:100%;margin-top:4px" onclick="submitQuickLog()">Log It</button>
+  `;
+
+  el.querySelectorAll('[data-ql="rating"]').forEach(c => {
+    c.addEventListener('click', () => {
+      el.querySelectorAll('[data-ql="rating"]').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+    });
+  });
+}
+
+function updateQuickAuds(theaterId) {
+  const select = document.getElementById('ql-aud');
+  const auds = auditoriums.filter(a => a.theater_id === theaterId);
+  select.innerHTML = `<option value="">Select auditorium...</option>` + auds.map(a => `<option value="${a.id}">Aud ${a.number}${a.format && a.format !== 'Standard' ? ' · ' + a.format : ''}</option>`).join('');
+}
+
+async function submitQuickLog() {
+  const audId = document.getElementById('ql-aud').value;
+  const row = document.getElementById('ql-row').value.toUpperCase();
+  const rating = document.querySelector('[data-ql="rating"].selected')?.dataset.val;
+  const note = document.getElementById('ql-note').value;
+
+  if (!audId || !row || !rating) { showToast('Fill in all fields'); return; }
+
+  await upsertRow(audId, row, { rating, notes: note || undefined });
+  showToast(`Row ${row} logged as ${rating}!`);
+  renderQuickView();
+}
+
+// ══════════════════════════════════════════════
+// STATS / BEST SEATS VIEW
+// ══════════════════════════════════════════════
+async function renderStatsView() {
+  const el = document.getElementById('stats-content');
+  el.innerHTML = `<div class="loading-center"><div class="spinner"></div></div>`;
+
+  try {
+    const { data: rows } = await sb.from('rows').select('*, auditoriums(number, format, theater_id, theaters(name))').eq('rating', 'love');
+    const { data: seats } = await sb.from('seats').select('*, auditoriums(number, theater_id, theaters(name))').eq('rating', 'love');
+
+    if (!rows?.length && !seats?.length) {
+      el.innerHTML = `<div class="empty-state"><div class="empty-icon">🌟</div><div class="empty-title">No Favorites Yet</div><div class="empty-sub">Rate some rows and seats to see your best picks here</div></div>`;
+      return;
+    }
+
+    // group love rows by theater
+    const byTheater = {};
+    (rows || []).forEach(r => {
+      const tName = r.auditoriums?.theaters?.name || 'Unknown';
+      if (!byTheater[tName]) byTheater[tName] = [];
+      byTheater[tName].push({ type: 'row', row: r.row_letter, aud: r.auditoriums?.number, format: r.auditoriums?.format, notes: r.notes });
+    });
+    (seats || []).forEach(s => {
+      const tName = s.auditoriums?.theaters?.name || 'Unknown';
+      if (!byTheater[tName]) byTheater[tName] = [];
+      byTheater[tName].push({ type: 'seat', row: s.row_letter, seat: s.seat_number, aud: s.auditoriums?.number });
+    });
+
+    el.innerHTML = `<div class="section-label">Your Favorite Spots</div>` + Object.entries(byTheater).map(([theater, items]) => `
+      <div class="stats-card">
+        <div class="stats-card-title">${theater}</div>
+        ${items.map(item => `
+          <div class="best-row-badge">
+            ❤️ ${item.type === 'row' ? `Row ${item.row}` : `${item.row}${item.seat}`}
+            ${item.aud ? ` · Aud ${item.aud}` : ''}
+            ${item.format && item.format !== 'Standard' ? ` · ${item.format}` : ''}
+          </div>
+        `).join(' ')}
+        ${items.filter(i => i.notes).map(i => `<div style="font-size:12px;color:var(--text2);margin-top:8px;font-style:italic">${i.row}: ${i.notes}</div>`).join('')}
+      </div>
+    `).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--text3);text-align:center;padding:40px">Configure Supabase to see stats</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════
+// ADD MODALS
+// ══════════════════════════════════════════════
+function openAddModal() {
+  document.getElementById('modal-add-chooser').classList.add('open');
+}
+
+function openTheaterModal() {
+  document.getElementById('new-theater-name').value = '';
+  document.getElementById('new-theater-location').value = '';
+  document.getElementById('modal-theater').classList.add('open');
+}
+
+function openAudModal() {
+  const select = document.getElementById('aud-theater-select');
+  select.innerHTML = theaters.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  document.getElementById('new-aud-num').value = '';
+  document.getElementById('new-aud-rows').value = '';
+  document.getElementById('new-aud-seats').value = '';
+  document.getElementById('new-aud-notes').value = '';
+  selectedFormat = 'Standard';
+  selectedSeats = 'Recliner';
+  selectedStairs = null;
+  document.querySelectorAll('#format-chips .chip').forEach(c => c.classList.toggle('selected', c.dataset.val === 'Standard'));
+  document.querySelectorAll('[data-grp="seats"]').forEach(c => c.classList.toggle('selected', c.dataset.val === 'Recliner'));
+  document.querySelectorAll('[data-grp="stairs"]').forEach(c => c.classList.remove('selected'));
+  document.getElementById('modal-aud').classList.add('open');
+}
+
+function openAudModalForTheater(theaterId) {
+  openAudModal();
+  document.getElementById('aud-theater-select').value = theaterId;
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+async function saveTheater() {
+  const name = document.getElementById('new-theater-name').value.trim();
+  const location = document.getElementById('new-theater-location').value.trim();
+  if (!name) { showToast('Enter a theater name'); return; }
+
+  const { data, error } = await sb.from('theaters').insert({ name, location }).select().single();
+  if (error) { showToast('Error saving'); return; }
+  theaters.push(data);
+  closeModal('modal-theater');
+  renderTheatersView();
+  showToast(`${name} added!`);
+}
+
+async function saveAuditorium() {
+  const theaterId = document.getElementById('aud-theater-select').value;
+  const number = parseInt(document.getElementById('new-aud-num').value);
+  const rowCount = parseInt(document.getElementById('new-aud-rows').value) || null;
+  const seatCount = parseInt(document.getElementById('new-aud-seats').value) || null;
+  const notes = document.getElementById('new-aud-notes').value.trim();
+
+  if (!theaterId || !number) { showToast('Select theater and enter number'); return; }
+
+  const { data, error } = await sb.from('auditoriums').insert({
+    theater_id: theaterId, number, format: selectedFormat, seat_type: selectedSeats,
+    stairs: selectedStairs, row_count: rowCount, default_seat_count: seatCount, notes
+  }).select().single();
+
+  if (error) { showToast('Error saving'); return; }
+  auditoriums.push(data);
+  closeModal('modal-aud');
+  renderTheatersView();
+  showToast(`Auditorium ${number} added!`);
+}
+
+function openEditAudModal() {
+  if (!currentAud) return;
+  // populate modal with current aud data and open
+  openAudModal();
+  const select = document.getElementById('aud-theater-select');
+  select.value = currentAud.theater_id;
+  document.getElementById('new-aud-num').value = currentAud.number;
+  document.getElementById('new-aud-rows').value = currentAud.row_count || '';
+  document.getElementById('new-aud-seats').value = currentAud.default_seat_count || '';
+  document.getElementById('new-aud-notes').value = currentAud.notes || '';
+  selectedFormat = currentAud.format || 'Standard';
+  selectedSeats = currentAud.seat_type || 'Recliner';
+  selectedStairs = currentAud.stairs;
+  document.querySelectorAll('#format-chips .chip').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedFormat));
+  document.querySelectorAll('[data-grp="seats"]').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedSeats));
+  document.querySelectorAll('[data-grp="stairs"]').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedStairs));
+
+  // change save to update
+  const saveBtn = document.querySelector('#modal-aud .btn-primary');
+  saveBtn.textContent = 'Update Auditorium';
+  saveBtn.onclick = async () => {
+    const rowCount = parseInt(document.getElementById('new-aud-rows').value) || null;
+    const seatCount = parseInt(document.getElementById('new-aud-seats').value) || null;
+    const notes = document.getElementById('new-aud-notes').value.trim();
+    await sb.from('auditoriums').update({
+      format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs,
+      row_count: rowCount, default_seat_count: seatCount, notes
+    }).eq('id', currentAud.id);
+    const idx = auditoriums.findIndex(a => a.id === currentAud.id);
+    if (idx >= 0) auditoriums[idx] = { ...auditoriums[idx], format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs, row_count: rowCount, default_seat_count: seatCount, notes };
+    currentAud = auditoriums[idx];
+    closeModal('modal-aud');
+    openAudDetail(currentAud.id);
+    showToast('Updated!');
+  };
+}
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>
