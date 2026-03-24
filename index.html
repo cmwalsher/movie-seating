@@ -40,26 +40,6 @@
     pointer-events: none; z-index: 9999; opacity: 0.4;
   }
 
-  /* ── LOGIN ── */
-  #login-screen {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    min-height: 100vh; padding: 40px 24px; gap: 32px;
-  }
-  .login-logo { font-family: 'Bebas Neue', sans-serif; font-size: 52px; letter-spacing: 6px; color: var(--amber); line-height: 1; }
-  .login-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); letter-spacing: 3px; text-transform: uppercase; margin-top: -24px; }
-  .login-card {
-    width: 100%; max-width: 340px;
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 28px 24px; display: flex; flex-direction: column; gap: 16px;
-  }
-  .login-card label { font-size: 11px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; font-family: 'DM Mono', monospace; }
-  .login-card input {
-    width: 100%; background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 12px 14px; color: var(--text);
-    font-size: 16px; font-family: 'DM Mono', monospace; letter-spacing: 4px; outline: none;
-    transition: border-color 0.2s;
-  }
-  .login-card input:focus { border-color: var(--amber); }
   .btn-primary {
     width: 100%; background: var(--amber); color: #0a0a0b;
     border: none; border-radius: var(--radius-sm); padding: 14px;
@@ -67,11 +47,9 @@
     font-family: 'DM Sans', sans-serif; cursor: pointer; transition: background 0.2s, transform 0.1s;
   }
   .btn-primary:active { transform: scale(0.98); background: var(--amber2); }
-  .login-error { font-size: 12px; color: var(--red); text-align: center; font-family: 'DM Mono', monospace; }
 
   /* ── APP SHELL ── */
-  #app { display: none; flex-direction: column; min-height: 100vh; }
-  #app.visible { display: flex; }
+  #app { display: flex; flex-direction: column; min-height: 100vh; }
 
   /* header */
   .app-header {
@@ -352,25 +330,13 @@
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="login-screen">
-  <div>
-    <div class="login-logo">SEATS</div>
-    <div class="login-sub">Theater Preference Tracker</div>
-  </div>
-  <div class="login-card">
-    <label>Password</label>
-    <input type="password" id="pw-input" placeholder="••••••" autocomplete="current-password">
-    <div id="login-error" class="login-error" style="display:none">Wrong password</div>
-    <button class="btn-primary" onclick="doLogin()">Enter</button>
-  </div>
-</div>
+<!-- Login removed — open and use -->
 
 <!-- APP -->
 <div id="app">
   <header class="app-header">
     <div class="app-logo">SEATS</div>
-    <div class="user-badge" id="user-badge" onclick="logout()" title="Tap to log out"></div>
+    <div class="user-badge" id="user-badge" onclick="toggleUser()" title="Tap to switch user"></div>
   </header>
   <nav class="tab-bar">
     <button class="tab-btn active" data-view="theaters" onclick="switchTab('theaters')">Theaters</button>
@@ -466,11 +432,11 @@
     </div>
     <div class="field-group">
       <div class="field-label">Row Count (optional)</div>
-      <input class="field-input" id="new-aud-rows" type="number" placeholder="e.g. 14" inputmode="numeric">
+      <input class="field-input" id="new-aud-rows" type="number" placeholder="15" inputmode="numeric" value="15">
     </div>
     <div class="field-group">
       <div class="field-label">Seats Per Row (optional, default)</div>
-      <input class="field-input" id="new-aud-seats" type="number" placeholder="e.g. 18" inputmode="numeric">
+      <input class="field-input" id="new-aud-seats" type="number" placeholder="18" inputmode="numeric" value="18">
     </div>
     <div class="field-group">
       <div class="field-label">Notes</div>
@@ -504,10 +470,10 @@
 const SUPABASE_URL = 'https://prvrmmwicuionzuzmfnw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBydnJtbXdpY3Vpb256dXptZm53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2ODkyMDEsImV4cCI6MjA4OTI2NTIwMX0.L2iGKoOOqwDt4158ca4g5pXbcBA_zyxeQRsJy1wQlNQ';
 
-const USERS = {
-  'slippy': { name: 'C', emoji: '🚡', id: 'C' },
-  'moomoo': { name: 'M', emoji: '👩🏻‍🦱', id: 'M' }
-};
+const USERS = [
+  { name: 'C', emoji: '🚡', id: 'C' },
+  { name: 'M', emoji: '👩🏻‍🦱', id: 'M' }
+];
 
 // ══════════════════════════════════════════════
 // STATE
@@ -523,15 +489,11 @@ let activeRowPanel = null;
 // ══════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const saved = sessionStorage.getItem('seats_user');
-  if (saved) {
-    currentUser = JSON.parse(saved);
-    enterApp();
-  }
-  document.getElementById('pw-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doLogin();
-  });
+  const saved = localStorage.getItem('seats_user');
+  currentUser = saved ? JSON.parse(saved) : USERS[0];
+  document.getElementById('user-badge').textContent = currentUser.emoji;
   setupChips();
+  loadData();
 });
 
 function setupChips() {
@@ -559,31 +521,14 @@ function setupChips() {
 }
 
 // ══════════════════════════════════════════════
-// AUTH
+// USER TOGGLE
 // ══════════════════════════════════════════════
-function doLogin() {
-  const pw = document.getElementById('pw-input').value;
-  const user = USERS[pw];
-  if (!user) {
-    document.getElementById('login-error').style.display = 'block';
-    return;
-  }
-  currentUser = user;
-  sessionStorage.setItem('seats_user', JSON.stringify(user));
-  enterApp();
-}
-
-function enterApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').classList.add('visible');
+function toggleUser() {
+  const next = USERS.find(u => u.id !== currentUser.id);
+  currentUser = next;
+  localStorage.setItem('seats_user', JSON.stringify(currentUser));
   document.getElementById('user-badge').textContent = currentUser.emoji;
-  loadData();
-}
-
-function logout() {
-  if (!confirm('Log out?')) return;
-  sessionStorage.removeItem('seats_user');
-  location.reload();
+  showToast('Switched to ' + currentUser.name + ' ' + currentUser.emoji);
 }
 
 // ══════════════════════════════════════════════
@@ -721,8 +666,8 @@ async function openAudDetail(audId) {
     </div>
 
     <div class="attr-row">
-      ${formatAttrs.map(a => `<div class="attr-pill on">${a}</div>`).join('')}
       <div class="attr-pill" style="cursor:pointer" onclick="openEditAudModal()">✏️ Edit</div>
+      ${formatAttrs.map(a => `<div class="attr-pill on">${a}</div>`).join('')}
     </div>
 
     <div class="legend">
@@ -747,27 +692,21 @@ async function openAudDetail(audId) {
 }
 
 function getRowLetters(aud, rows) {
+  // Always show row_count rows (default 15), or more if saved rows go higher
+  let count = aud.row_count || 15;
   const fromRows = Object.keys(rows);
   if (fromRows.length > 0) {
-    // build full alphabet from A to max found
-    const letters = fromRows.map(r => r.charCodeAt(0));
-    const maxCode = Math.max(...letters);
-    const result = [];
-    for (let i = 65; i <= maxCode; i++) result.push(String.fromCharCode(i));
-    return result;
+    const maxCode = Math.max(...fromRows.map(r => r.charCodeAt(0)));
+    count = Math.max(count, maxCode - 64);
   }
-  if (aud.row_count) {
-    return Array.from({length: aud.row_count}, (_, i) => String.fromCharCode(65 + i));
-  }
-  // default 10 rows
-  return Array.from({length: 10}, (_, i) => String.fromCharCode(65 + i));
+  return Array.from({length: count}, (_, i) => String.fromCharCode(65 + i));
 }
 
 function renderSeatGrid(rowLetters, rows, seatsByRow, aud) {
   let html = '';
   rowLetters.forEach((letter, idx) => {
     const rowInfo = rows[letter] || {};
-    const seatCount = rowInfo.seat_count || aud.default_seat_count || 16;
+    const seatCount = rowInfo.seat_count || aud.default_seat_count || 18;
     const rowRating = rowInfo.rating || '';
 
     // aisle gap above first row
@@ -1086,8 +1025,8 @@ function openAudModal() {
   const select = document.getElementById('aud-theater-select');
   select.innerHTML = theaters.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
   document.getElementById('new-aud-num').value = '';
-  document.getElementById('new-aud-rows').value = '';
-  document.getElementById('new-aud-seats').value = '';
+  document.getElementById('new-aud-rows').value = '15';
+  document.getElementById('new-aud-seats').value = '18';
   document.getElementById('new-aud-notes').value = '';
   selectedFormat = 'Standard';
   selectedSeats = 'Recliner';
