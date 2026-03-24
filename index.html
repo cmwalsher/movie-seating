@@ -431,6 +431,15 @@
       </div>
     </div>
     <div class="field-group">
+      <div class="field-label">Door / Exit</div>
+      <div class="chip-select">
+        <div class="chip" data-grp="door" data-val="Both">Both sides</div>
+        <div class="chip" data-grp="door" data-val="Left">Left only</div>
+        <div class="chip" data-grp="door" data-val="Right">Right only</div>
+        <div class="chip" data-grp="door" data-val="None">No door</div>
+      </div>
+    </div>
+    <div class="field-group">
       <div class="field-label">Row Count (optional)</div>
       <input class="field-input" id="new-aud-rows" type="number" placeholder="15" inputmode="numeric" value="15">
     </div>
@@ -481,7 +490,7 @@ const USERS = [
 let sb, currentUser = null;
 let theaters = [], auditoriums = [], rowData = {};
 let currentTheater = null, currentAud = null;
-let selectedFormat = 'Standard', selectedSeats = 'Recliner', selectedStairs = null;
+let selectedFormat = 'Standard', selectedSeats = 'Recliner', selectedStairs = null, selectedDoor = null;
 let activeRowPanel = null;
 
 // ══════════════════════════════════════════════
@@ -516,6 +525,13 @@ function setupChips() {
       document.querySelectorAll('[data-grp="stairs"]').forEach(x => x.classList.remove('selected'));
       c.classList.add('selected');
       selectedStairs = c.dataset.val;
+    });
+  });
+  document.querySelectorAll('[data-grp="door"]').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('[data-grp="door"]').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      selectedDoor = c.dataset.val;
     });
   });
 }
@@ -655,6 +671,7 @@ async function openAudDetail(audId) {
     currentAud.format && currentAud.format !== 'Standard' ? currentAud.format : null,
     currentAud.seat_type,
     currentAud.stairs ? `Stairs: ${currentAud.stairs}` : null,
+    currentAud.door ? `Door: ${currentAud.door}` : null,
     currentAud.notes ? '📝 Notes' : null
   ].filter(Boolean);
 
@@ -718,7 +735,7 @@ function renderSeatGrid(rowLetters, rows, seatsByRow, aud) {
     html += `<div class="seat-row" data-row="${letter}">
       <div class="row-label">${letter}</div>
       ${Array.from({length: seatCount}, (_, i) => {
-        const sNum = i + 1;
+        const sNum = seatCount - i;
         const seat = (seatsByRow[letter] || {})[sNum] || {};
         const rating = seat.rating || '';
         return `<div class="seat ${rating}" data-row="${letter}" data-seat="${sNum}" title="${letter}${sNum}">${sNum}</div>`;
@@ -1031,9 +1048,11 @@ function openAudModal() {
   selectedFormat = 'Standard';
   selectedSeats = 'Recliner';
   selectedStairs = null;
+  selectedDoor = null;
   document.querySelectorAll('#format-chips .chip').forEach(c => c.classList.toggle('selected', c.dataset.val === 'Standard'));
   document.querySelectorAll('[data-grp="seats"]').forEach(c => c.classList.toggle('selected', c.dataset.val === 'Recliner'));
   document.querySelectorAll('[data-grp="stairs"]').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('[data-grp="door"]').forEach(c => c.classList.remove('selected'));
   document.getElementById('modal-aud').classList.add('open');
 }
 
@@ -1070,7 +1089,7 @@ async function saveAuditorium() {
 
   const { data, error } = await sb.from('auditoriums').insert({
     theater_id: theaterId, number, format: selectedFormat, seat_type: selectedSeats,
-    stairs: selectedStairs, row_count: rowCount, default_seat_count: seatCount, notes
+    stairs: selectedStairs, door: selectedDoor, row_count: rowCount, default_seat_count: seatCount, notes
   }).select().single();
 
   if (error) { showToast('Error saving'); return; }
@@ -1093,9 +1112,11 @@ function openEditAudModal() {
   selectedFormat = currentAud.format || 'Standard';
   selectedSeats = currentAud.seat_type || 'Recliner';
   selectedStairs = currentAud.stairs;
+  selectedDoor = currentAud.door;
   document.querySelectorAll('#format-chips .chip').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedFormat));
   document.querySelectorAll('[data-grp="seats"]').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedSeats));
   document.querySelectorAll('[data-grp="stairs"]').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedStairs));
+  document.querySelectorAll('[data-grp="door"]').forEach(c => c.classList.toggle('selected', c.dataset.val === selectedDoor));
 
   // change save to update
   const saveBtn = document.querySelector('#modal-aud .btn-primary');
@@ -1105,11 +1126,11 @@ function openEditAudModal() {
     const seatCount = parseInt(document.getElementById('new-aud-seats').value) || null;
     const notes = document.getElementById('new-aud-notes').value.trim();
     await sb.from('auditoriums').update({
-      format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs,
+      format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs, door: selectedDoor,
       row_count: rowCount, default_seat_count: seatCount, notes
     }).eq('id', currentAud.id);
     const idx = auditoriums.findIndex(a => a.id === currentAud.id);
-    if (idx >= 0) auditoriums[idx] = { ...auditoriums[idx], format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs, row_count: rowCount, default_seat_count: seatCount, notes };
+    if (idx >= 0) auditoriums[idx] = { ...auditoriums[idx], format: selectedFormat, seat_type: selectedSeats, stairs: selectedStairs, door: selectedDoor, row_count: rowCount, default_seat_count: seatCount, notes };
     currentAud = auditoriums[idx];
     closeModal('modal-aud');
     openAudDetail(currentAud.id);
