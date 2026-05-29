@@ -387,6 +387,10 @@
       <div class="field-label">Location / City</div>
       <input class="field-input" id="new-theater-location" placeholder="e.g. Mission Valley, San Diego">
     </div>
+    <div class="field-group">
+      <div class="field-label">Fandango URL (optional)</div>
+      <input class="field-input" id="new-theater-fandango" placeholder="https://www.fandango.com/..." type="url">
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('modal-theater')">Cancel</button>
       <button class="btn-primary" style="flex:2" onclick="saveTheater()">Save Theater</button>
@@ -637,6 +641,7 @@ function openTheater(theaterId) {
     <div style="margin-bottom:20px">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:3px">${currentTheater.name}</div>
       <div style="font-size:13px;color:var(--text2);font-family:'DM Mono',monospace">${currentTheater.location || ''}</div>
+      ${currentTheater.fandango_url ? `<a href="${currentTheater.fandango_url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:8px 14px;background:var(--amber-dim);border:1px solid var(--amber);border-radius:20px;color:var(--amber);font-family:'DM Mono',monospace;font-size:11px;letter-spacing:1px;text-decoration:none;">🎟 Showtimes on Fandango ↗</a>` : ''}
     </div>
     <div class="section-label">Auditoriums</div>
     ${auds.length ? auds.map(a => `
@@ -1048,6 +1053,7 @@ function openAddModal() {
 function openTheaterModal() {
   document.getElementById('new-theater-name').value = '';
   document.getElementById('new-theater-location').value = '';
+  document.getElementById('new-theater-fandango').value = '';
   document.getElementById('modal-theater').classList.add('open');
 }
 
@@ -1083,7 +1089,8 @@ async function saveTheater() {
   const location = document.getElementById('new-theater-location').value.trim();
   if (!name) { showToast('Enter a theater name'); return; }
 
-  const { data, error } = await sb.from('theaters').insert({ name, location }).select().single();
+  const fandango_url = document.getElementById('new-theater-fandango').value.trim() || null;
+  const { data, error } = await sb.from('theaters').insert({ name, location, fandango_url }).select().single();
   if (error) { showToast('Error saving'); return; }
   theaters.push(data);
   closeModal('modal-theater');
